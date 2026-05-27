@@ -1,0 +1,83 @@
+<programa>              ::= <lista_sentencias>
+<lista_sentencias>      ::= <sentencia> <lista_sentencias>
+<lista_sentencias>      ::= ε
+
+<sentencia>             ::= <comando_movimiento>
+<sentencia>             ::= <comando_movimiento_codo>
+<sentencia>             ::= <comando_rotacion>
+<sentencia>             ::= <sentencia_if>
+<sentencia>             ::= <sentencia_if_else>
+<sentencia>             ::= <sentencia_for>
+<sentencia>             ::= <declaracion> <delimitador_linea>  /* NUEVO: Permite "int x = 10;" */
+<sentencia>             ::= <asignacion> <delimitador_linea>   /* NUEVO: Permite "x = 10;" sueltos */
+<sentencia>             ::= <incremento> <delimitador_linea>   /* NUEVO: Permite "x++;" sueltos */
+
+<declaracion>           ::= <tipo_dato_token> <identificador_token> <operador_asignacion> <primario>
+<asignacion>            ::= <identificador_token> <operador_asignacion> <primario>
+<incremento>            ::= <identificador_token> <operador_incremento>
+
+<comando_movimiento>    ::= <move_token> <direccion> <magnitud> <parte> <delimitador_linea>
+<comando_movimiento_codo> ::= <move_token> <direccion> <magnitud> <delimitador_linea>
+
+<direccion>             ::= <up_token>
+<direccion>             ::= <down_token>
+
+<magnitud>              ::= <low_token>
+<magnitud>              ::= <middle_token>
+<magnitud>              ::= <high_token>
+
+<parte>                 ::= <thumb_token>
+<parte>                 ::= <index_fng_token>
+<parte>                 ::= <middle_fng_token>
+<parte>                 ::= <ring_fng_token>
+<parte>                 ::= <little_fng_token>
+
+<comando_rotacion>      ::= <rotate_token> <dir_rotacion> <degree_token> <parentesis_izq> <numero_token> <parentesis_der> <delimitador_linea>
+<dir_rotacion>          ::= <left_token>
+<dir_rotacion>          ::= <right_token>
+
+<sentencia_if>          ::= <if_token> <parentesis_izq> <expresion> <parentesis_der> <bloque>
+<sentencia_if_else>     ::= <if_token> <parentesis_izq> <expresion> <parentesis_der> <bloque> <else_token> <bloque>
+<bloque>                ::= <llave_izq> <lista_sentencias> <llave_der>
+<bloque>                ::= <llave_izq> <llave_der>
+
+<sentencia_for>         ::= <for_token> <parentesis_izq> <asignacion> <delimitador_linea> <expresion> <delimitador_linea> <incremento> <parentesis_der> <bloque>
+
+<expresion>             ::= <expresion_relacional>
+<expresion>             ::= <expresion_relacional> <operador_logico> <expresion>  /* CAMBIO: Ahora es recursiva */
+
+<expresion_relacional>  ::= <primario>
+<expresion_relacional>  ::= <primario> <operador_relacional> <primario>
+
+<primario>              ::= <identificador_token>
+<primario>              ::= <numero_token>
+<primario>              ::= <estado_token>
+
+<estado_token>          ::= <thumb_token>
+<estado_token>          ::= <index_fng_token>
+<estado_token>          ::= <middle_fng_token>
+<estado_token>          ::= <ring_fng_token>
+<estado_token>          ::= <little_fng_token>
+<estado_token>          ::= <up_token>
+<estado_token>          ::= <down_token>
+<estado_token>          ::= <low_token>
+<estado_token>          ::= <middle_token>
+<estado_token>          ::= <high_token>
+
+<operador_asignacion>   ::= <=_token>
+<operador_incremento>   ::= <++_token>
+
+<operador_relacional>   ::= <==_token>
+<operador_relacional>   ::= <mayor_que_token>   /* CAMBIO: Antes <<>_token> */
+<operador_relacional>   ::= <menor_que_token>   /* CAMBIO: Antes <<<_token> */
+
+<operador_logico>       ::= <&&_token>
+<operador_logico>       ::= <||_token>
+
+<delimitador_linea>     ::= <;_token>
+<parentesis_izq>        ::= <(_token>
+<parentesis_der>        ::= <)_token>
+<llave_izq>             ::= <{_token>
+<llave_der>             ::= <}_token>
+
+<tipo_dato_token>       ::= <int_token>         /* NUEVO: Si utilizas tipos de datos */

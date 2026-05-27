@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PHP Compiler IDE & Robot Controller</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <style>
+        :root { --bg-color: #282a36; --menu-bg: #44475a; --text-color: #f8f8f2; --accent: #bd93f9; --success: #50fa7b; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        nav { background-color: var(--menu-bg); display: flex; padding: 0 10px; z-index: 100; align-items: center; min-height: 45px; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropbtn { background: transparent; color: white; padding: 12px 15px; border: none; cursor: pointer; font-size: 14px; }
+        .dropbtn:hover { background-color: var(--accent); color: white; }
+        .dropdown-content { display: none; position: absolute; background-color: #f9f9f9; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 1000; }
+        .dropdown-content a { color: black; padding: 10px 16px; text-decoration: none; display: block; font-size: 13px; cursor: pointer; }
+        .dropdown-content a:hover { background-color: #ddd; }
+        .dropdown:hover .dropdown-content { display: block; }
+        
+        /* Botones de acción principal */
+        .btn-connect { margin-left: auto; background-color: #f1fa8c; color: #282a36; font-weight: bold; border-radius: 4px; padding: 8px 15px; transition: 0.3s; border: none; cursor: pointer; margin-right: 10px; }
+        .btn-connect:hover { background-color: #e2eb7a; }
+        .btn-compile { background-color: var(--success); color: #282a36; font-weight: bold; border-radius: 4px; padding: 8px 20px; transition: 0.3s; border: none; cursor: pointer; }
+        .btn-compile:hover { background-color: #40c963; }
+
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        
+        .left-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        #editor-container { flex: 2; border-bottom: 2px solid #444; }
+        .CodeMirror { height: 100% !important; font-size: 16px; }
+        #terminal { flex: 1; background-color: #000; color: #f8f8f2; font-family: monospace; padding: 10px; overflow-y: auto; font-size: 14px; min-height: 150px; }
+        .terminal-header { font-weight: bold; color: var(--accent); margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        
+        .right-panel { width: 500px; background-color: #1e1e2e; border-left: 2px solid #444; display: flex; flex-direction: column; overflow: hidden; }
+        .right-panel-header { background-color: var(--menu-bg); padding: 12px 15px; font-weight: bold; color: var(--accent); border-bottom: 1px solid #444; text-align: center; }
+        #symbol-table { flex: 1; overflow-y: auto; padding: 10px; }
+        #symbol-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #symbol-table th { background-color: #44475a; padding: 8px 6px; text-align: left; position: sticky; top: 0; z-index: 10; font-size: 11px; }
+        #symbol-table td { padding: 5px 6px; border-bottom: 1px solid #333; }
+        #symbol-table tr:hover td { background-color: #333; }
+        .empty-table { text-align: center; color: #666; padding: 40px 20px; font-style: italic; }
+        .val-null { color: #666; font-style: italic; }
+        .val-number { color: #50fa7b; }
+        .val-boolean { color: #f1fa8c; }
+        
+        .info-text { color: #8be9fd; }
+        .error-text { color: #ff5555; }
+        .success-text { color: #50fa7b; }
+        .warning-text { color: #f1fa8c; }
+        
+        #file-input { display: none; }
+
+        /* ========== MODAL ========== */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background-color: #1e1e2e; border: 2px solid var(--accent); border-radius: 10px; width: 80%; max-width: 900px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .modal-header { background-color: var(--menu-bg); padding: 15px 20px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; }
+        .modal-header h2 { margin: 0; color: var(--accent); font-size: 20px; }
+        .modal-close { background: none; border: none; color: #ff5555; font-size: 28px; cursor: pointer; padding: 0 10px; line-height: 1; }
+        .modal-close:hover { color: #ff0000; }
+        .modal-body { flex: 1; overflow-y: auto; padding: 20px; color: #ccc; line-height: 1.6; }
+        .modal-body h3 { color: var(--accent); margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .modal-body h4 { color: #8be9fd; margin-top: 15px; margin-bottom: 8px; }
+        .modal-body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+        .modal-body th { background-color: #44475a; padding: 8px 12px; text-align: left; color: #f8f8f2; }
+        .modal-body td { padding: 6px 12px; border-bottom: 1px solid #333; }
+        .modal-body td code { background-color: #44475a; padding: 2px 6px; border-radius: 3px; color: #50fa7b; }
+        .modal-body pre { background-color: #000; padding: 15px; border-radius: 5px; border-left: 3px solid var(--accent); overflow-x: auto; font-size: 14px; line-height: 1.4; color: #f8f8f2; margin: 10px 0; }
+        .modal-body ul { margin-left: 20px; margin-bottom: 10px; }
+        .modal-body ul li { margin-bottom: 5px; }
+        .modal-body p { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="dropdown">
+        <button class="dropbtn">Archivo</button>
+        <div class="dropdown-content">
+            <a onclick="nuevoArchivo()">Nuevo Archivo</a>
+            <a onclick="abrirArchivo()">Abrir Archivo</a>
+            <a onclick="guardarArchivo()">Guardar Archivo</a>
+        </div>
+    </div>
+    <div class="dropdown">
+        <button class="dropbtn">Herramientas</button>
+        <div class="dropdown-content">
+            <a onclick="compileAction('Tabla de Símbolos')">Tabla de Símbolos</a>
+            <a onclick="compileAction('Pila de Errores')">Pila de Errores</a>
+        </div>
+    </div>
+    <div class="dropdown">
+        <button class="dropbtn">Ayuda</button>
+        <div class="dropdown-content">
+            <a onclick="mostrarModal('lenguaje')">Lenguaje</a>
+            <a onclick="mostrarModal('ejemplos')">Ejemplos</a>
+            <a onclick="mostrarModal('nosotros')">Nosotros</a>
+        </div>
+    </div>
+
+    <button class="btn-connect" id="btn-conectar" onclick="conectarHardware()">🔌 Conectar Robot</button>
+    <button class="dropbtn btn-compile" onclick="compileAction('Compilar')">▶ Compilar y Enviar</button>
+</nav>
+
+<div class="main-container">
+    <div class="left-panel">
+        <div id="editor-container">
+            <textarea id="code-editor"></textarea>
+        </div>
+        <div id="terminal">
+            <div class="terminal-header">Consola de Salida</div>
+            <div id="terminal-content"></div>
+        </div>
+    </div>
+    
+    <div class="right-panel">
+        <div class="right-panel-header">Tabla de Símbolos</div>
+        <div id="symbol-table">
+            <div class="empty-table">Ejecuta "Compilar" o "Tabla de Símbolos"<br>para ver los tokens aquí</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2 id="modal-title">Modal</h2>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+    </div>
+</div>
+
+<input type="file" id="file-input" accept=".txt,.rob,.code" onchange="cargarArchivo(event)">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/selection/active-line.min.js"></script>
+
+<script>
+    var editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), {
+        lineNumbers: true,
+        mode: "text/x-c++src",
+        theme: "dracula",
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        styleActiveLine: true,
+        indentUnit: 4
+    });
+
+    // ==================== WEB SERIAL API (CONEXIÓN CON HARDWARE) ====================
+    
+    let puertoHardware;
+    let escritorSerial;
+
+    async function conectarHardware() {
+        try {
+            // Verificar si el navegador soporta Web Serial API
+            if (!navigator.serial) {
+                alert("Tu navegador no soporta la Web Serial API. Por favor, usa Google Chrome, Microsoft Edge o navegadores basados en Chromium.");
+                return;
+            }
+
+            // Solicitar puerto al usuario
+            puertoHardware = await navigator.serial.requestPort();
+            
+            // Abrir el puerto
+            await puertoHardware.open({ baudRate: 115200 });
+            escritorSerial = puertoHardware.writable.getWriter();
+            
+            // Actualizar la UI
+            const btnConectar = document.getElementById('btn-conectar');
+            btnConectar.innerHTML = '✅ Robot Conectado';
+            btnConectar.style.backgroundColor = 'var(--success)';
+            btnConectar.style.color = '#000';
+            
+            logToTerminal("¡Hardware conectado exitosamente por USB!", 'success');
+        } catch (error) {
+            console.error("Error al conectar:", error);
+            logToTerminal("No se pudo conectar al puerto Serial o la acción fue cancelada.", 'error');
+        }
+    }
+
+    async function enviarBytecode(bytecodeString) {
+        if (!escritorSerial) {
+            logToTerminal("⚠️ Advertencia: No hay hardware conectado. El código se compiló exitosamente pero no se envió al robot.", 'warning');
+            logToTerminal("Haz clic en '🔌 Conectar Robot' en la barra superior para vincular el hardware.", 'warning');
+            return;
+        }
+
+        try {
+            // Convertir el string de Hex ("0x01 0x10 0xFF") a Uint8Array puro
+            const hexArray = bytecodeString.trim().split(' ');
+            const bytesEnteros = hexArray.filter(hex => hex !== '').map(hex => parseInt(hex, 16));
+            const bufferBinario = new Uint8Array(bytesEnteros);
+
+            // Escribir en el puerto USB
+            await escritorSerial.write(bufferBinario);
+            logToTerminal("🤖 ¡Bytecode enviado al robot con éxito! El movimiento debería comenzar.", 'success');
+        } catch (error) {
+            console.error("Fallo durante la transmisión serial:", error);
+            logToTerminal("Error al enviar los datos al robot. Verifica que el cable no se haya desconectado.", 'error');
+            
+            // Si el puerto falla, reseteamos el botón para forzar reconexión
+            document.getElementById('btn-conectar').innerHTML = '🔌 Reconectar Robot';
+            document.getElementById('btn-conectar').style.backgroundColor = '#ff5555';
+            escritorSerial = null;
+        }
+    }
+
+
+    // ==================== FUNCIONES DE ARCHIVO ====================
+    
+    function nuevoArchivo() {
+        if (editor.getValue().trim() !== '') {
+            if (confirm('¿Deseas crear un nuevo archivo? Se perderá el código actual no guardado.')) {
+                editor.setValue('');
+                logToTerminal('Nuevo archivo creado.', 'info');
+            }
+        } else {
+            editor.setValue('');
+            logToTerminal('Nuevo archivo creado.', 'info');
+        }
+    }
+    
+    function abrirArchivo() {
+        document.getElementById('file-input').click();
+    }
+    
+    function cargarArchivo(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            editor.setValue(e.target.result);
+            logToTerminal(`Archivo cargado: ${file.name}`, 'success');
+        };
+        reader.onerror = function() {
+            logToTerminal('Error al leer el archivo.', 'error');
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+    
+    function guardarArchivo() {
+        const code = editor.getValue();
+        const blob = new Blob([code], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'codigo_robotico.rob';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        logToTerminal('Archivo guardado como: codigo_robotico.rob', 'success');
+    }
+
+    // ==================== FUNCIONES DE MODAL ====================
+    
+    function mostrarModal(tipo) {
+        const overlay = document.getElementById('modal-overlay');
+        const title = document.getElementById('modal-title');
+        const body = document.getElementById('modal-body');
+        
+        if (tipo === 'lenguaje') {
+            title.textContent = 'Lenguaje de Control Robótico';
+            body.innerHTML = getContenidoLenguaje();
+        } else if (tipo === 'ejemplos') {
+            title.textContent = '💡 Ejemplos de Código';
+            body.innerHTML = getContenidoEjemplos();
+        } else if (tipo === 'nosotros') {
+            title.textContent = '👥 Nosotros';
+            body.innerHTML = getContenidoNosotros();
+        }
+        
+        overlay.classList.add('active');
+    }
+    
+    function cerrarModal(event) {
+        if (event && event.target !== document.getElementById('modal-overlay')) return;
+        document.getElementById('modal-overlay').classList.remove('active');
+    }
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+    });
+
+    // ==================== CONTENIDO DE AYUDA ====================
+    
+    function getContenidoLenguaje() {
+        return `
+            <p>Este lenguaje de dominio específico (DSL) permite controlar una extremidad robótica con múltiples grados de libertad (codo, muñeca, dedos).</p>
+            
+            <h3>Tipos de Datos</h3>
+            <table>
+                <tr><th>Tipo</th><th>Descripción</th><th>Ejemplo</th></tr>
+                <tr><td><code>int</code></td><td>Números enteros para contadores y grados</td><td><code>int x = 0 ;</code></td></tr>
+                <tr><td><code>boolean</code></td><td>Valores lógicos (true/false) para condiciones</td><td><code>boolean flag = true ;</code></td></tr>
+            </table>
+            
+            <h3>Comandos de Movimiento</h3>
+            <p><strong>Estructura:</strong> <code>move &lt;dirección&gt; &lt;magnitud&gt; &lt;parte&gt; ;</code></p>
+            <p>La <code>&lt;parte&gt;</code> es opcional. Si se omite, el movimiento aplica al codo.</p>
+            <table>
+                <tr><th>Elemento</th><th>Opciones</th></tr>
+                <tr><td><strong>Dirección</strong></td><td><code>up</code>, <code>down</code></td></tr>
+                <tr><td><strong>Magnitud</strong></td><td><code>low</code>, <code>middle</code>, <code>high</code></td></tr>
+                <tr><td><strong>Parte (dedo)</strong></td><td><code>thumb</code>, <code>index_fng</code>, <code>middle_fng</code>, <code>ring_fng</code>, <code>little_fng</code></td></tr>
+            </table>
+            
+            <h3>Comandos de Rotación</h3>
+            <p><strong>Estructura:</strong> <code>rotate &lt;dirección&gt; degree ( &lt;número&gt; ) ;</code></p>
+            <table>
+                <tr><th>Elemento</th><th>Opciones</th></tr>
+                <tr><td><strong>Dirección</strong></td><td><code>left</code>, <code>right</code></td></tr>
+                <tr><td><strong>Grados</strong></td><td>Número entero (ej. 45, 90, 180)</td></tr>
+            </table>
+            
+            <h3>Estructuras de Control</h3>
+            <h4>Condicional If / Else</h4>
+            <pre>if ( &lt;expresión&gt; ) {
+    &lt;sentencias&gt;
+} else {
+    &lt;sentencias&gt;
+}</pre>
+            
+            <h4>Bucle For</h4>
+            <pre>for ( &lt;declaración/asignación&gt; ; &lt;expresión&gt; ; &lt;incremento&gt; ) {
+    &lt;sentencias&gt;
+}</pre>
+        `;
+    }
+    
+    function getContenidoEjemplos() {
+        return `
+            <h3>Movimiento Básico de Dedo</h3>
+            <pre>move up high thumb ;</pre>
+            
+            <h3>Secuencia de Movimientos</h3>
+            <pre>move up high thumb ;
+move up middle index_fng ;
+move down low ;
+rotate left degree ( 30 ) ;
+move up high ;</pre>
+        `;
+    }
+    
+    function getContenidoNosotros() {
+        return `<h3>👥 Nuestro Equipo</h3><p>Proyecto de Compiladores y Robótica.</p>`;
+    }
+
+    // ==================== FUNCIONES DE TERMINAL ====================
+    
+    function logToTerminal(message, type = 'info') {
+        const terminal = document.getElementById('terminal-content');
+        let className = '';
+        if(type === 'error') className = 'error-text';
+        if(type === 'success') className = 'success-text';
+        if(type === 'warning') className = 'warning-text';
+        if(type === 'info') className = 'info-text';
+
+        terminal.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${message}</div>`;
+        document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight;
+    }
+    
+    function limpiarTerminal() {
+        document.getElementById('terminal-content').innerHTML = '';
+    }
+    
+    function limpiarTablaSimbolos() {
+        document.getElementById('symbol-table').innerHTML = '<div class="empty-table">Ejecuta "Compilar" o "Tabla de Símbolos"<br>para ver los tokens aquí</div>';
+    }
+    
+    function mostrarTablaSimbolos(tokens, valores) {
+        const container = document.getElementById('symbol-table');
+        if (tokens.length === 0) {
+            container.innerHTML = '<div class="empty-table">No se encontraron tokens válidos</div>';
+            return;
+        }
+        
+        let html = '<table>';
+        html += '<thead><tr><th>#</th><th>Lexema</th><th>ID</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>';
+        tokens.forEach((t, index) => {
+            let valor = 'null';
+            let valorClass = 'val-null';
+            
+            if (t.tipo === 'Número') {
+                valor = t.lexema;
+                valorClass = 'val-number';
+            } else if (t.lexema === 'true' || t.lexema === 'false') {
+                valor = t.lexema;
+                valorClass = 'val-boolean';
+            } else if (valores && valores[t.lexema] !== undefined) {
+                valor = valores[t.lexema];
+                if (typeof valor === 'number') valorClass = 'val-number';
+                else if (typeof valor === 'boolean') valorClass = 'val-boolean';
+            }
+            
+            html += `<tr>
+                <td>${index + 1}</td>
+                <td><strong>${t.lexema}</strong></td>
+                <td>${t.id}</td>
+                <td>${t.tipo}</td>
+                <td class="${valorClass}">${valor}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    // ==================== FUNCIÓN PRINCIPAL DE COMPILACIÓN ====================
+    
+    function compileAction(actionType) {
+        const code = editor.getValue();
+        
+        limpiarTerminal();
+        limpiarTablaSimbolos();
+        
+        logToTerminal(`--- EJECUTANDO: ${actionType.toUpperCase()} ---`, 'warning');
+
+        const formData = new FormData();
+        formData.append('action', actionType);
+        formData.append('code', code);
+
+        fetch('backend.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.status === 'error') {
+                logToTerminal(res.message, 'error');
+                return;
+            } 
+            
+            if (res.type === 'compilacion' || res.type === 'tabla') {
+                
+                if (res.errores_lexicos && res.errores_lexicos.length > 0) {
+                    logToTerminal("Fallo en Análisis Léxico. Se abortó el proceso.", 'error');
+                    res.errores_lexicos.forEach(e => logToTerminal(e, 'error'));
+                    return; 
+                }
+                logToTerminal("Análisis Léxico completado.", 'success');
+
+                if (res.data && res.data.length > 0) {
+                    mostrarTablaSimbolos(res.data, res.valores || {});
+                    
+                    if (res.type === 'tabla') {
+                        logToTerminal("Se encontraron " + res.data.length + " tokens. Ver panel derecho.", 'info');
+                    }
+                }
+
+                if (res.errores_sintacticos && res.errores_sintacticos.length > 0) {
+                    logToTerminal("Error de Sintaxis detectado:", 'error');
+                    res.errores_sintacticos.forEach(e => logToTerminal(e, 'error'));
+                    return;
+                }
+
+                if (res.errores_semanticos && res.errores_semanticos.length > 0) {
+                    logToTerminal("Error Semántico detectado:", 'error');
+                    res.errores_semanticos.forEach(e => logToTerminal(e, 'error'));
+                    return;
+                }
+
+                if (res.type === 'compilacion') {
+                    logToTerminal("Análisis Sintáctico completado.", 'success');
+                    logToTerminal("Análisis Semántico completado. Sin errores.", 'success');
+                    
+                    if (res.bytecode && res.bytecode.trim() !== '') {
+                        logToTerminal("====== BYTECODE GENERADO ======", 'warning');
+                        logToTerminal(res.bytecode, 'info');
+                        logToTerminal("===============================", 'warning');
+                        
+                        // --- AQUÍ OCURRE LA MAGIA DEL ENVÍO ---
+                        // Si todo salió bien, enviamos los datos vía USB
+                        enviarBytecode(res.bytecode);
+                    }
+                }
+            } 
+            else if (res.type === 'errores') {
+                if (res.data.length === 0) {
+                    logToTerminal("La pila de errores léxicos está vacía.", 'success');
+                } else {
+                    logToTerminal("Se encontraron " + res.data.length + " error(es):", 'warning');
+                    res.data.forEach(e => logToTerminal(e, 'error'));
+                }
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            logToTerminal("Error de conexión con el servidor (PHP).", 'error');
+        });
+    }
+</script>
+
+</body>
+</html>
